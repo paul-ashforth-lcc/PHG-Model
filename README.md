@@ -1,6 +1,6 @@
 # Public Health Grant Allocation Model (7-Domain Engine)
 
-An interactive R Shiny decision-support application built for public health intelligence managers, local authority finance officers, and healthcare commissioners. This tool models needs-based Public Health Grant distributions across local authorities—specifically configured for **Lincoln UA** and **Lincolnshire UA**—moving away from historical legacy allocations toward a multi-factor formulaic approach.
+An interactive R Shiny decision-support application built for public health intelligence managers, local authority finance officers, and healthcare commissioners. This tool models needs-based Public Health Grant distributions across local authorities specifically configured for **Lincoln UA** and **Lincolnshire UA** moving away from historical legacy allocations toward a multi-factor formulaic approach.
 
 ---
 
