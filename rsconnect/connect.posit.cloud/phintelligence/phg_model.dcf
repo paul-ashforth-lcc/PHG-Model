@@ -1,0 +1,12 @@
+name: phg_model
+title: PHG Model
+username: phintelligence
+account: phintelligence
+server: connect.posit.cloud
+hostUrl: https://api.connect.posit.cloud/v1
+appId: 019fa95a-41d4-e495-5ec3-a02491f04a6f
+bundleId:
+url: https://connect.posit.cloud/phintelligence/content/019fa95a-41d4-e495-5ec3-a02491f04a6f
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
