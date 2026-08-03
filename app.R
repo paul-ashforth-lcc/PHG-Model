@@ -164,6 +164,22 @@ E05014447,Waddington Rural,8763,1938,2116,21320
 E05014448,Witham St Hughs & Swinderby,6118,1655,905,15461.67
 '
 
+# Default Service Percentages List
+default_service_splits <- list(
+  srv_019           = 32.2,
+  srv_sexhealth     = 20.2,
+  srv_staffing      = 17.1,
+  srv_wellbeing     = 9.6,
+  srv_housing       = 6.4,
+  srv_lifestyle     = 4.0,
+  srv_cyp_ewb       = 2.9,
+  srv_cyp_other     = 2.6,
+  srv_healthchecks  = 1.7,
+  srv_adult_comm    = 1.6,
+  srv_ph_comm       = 1.0,
+  srv_gambling_oral = 0.7
+)
+
 # ------------------------------------------------------------------------------
 # 1. SHINY UI
 # ------------------------------------------------------------------------------
@@ -244,6 +260,33 @@ ui <- page_sidebar(
                 )
               )
     ),
+    nav_panel("Budget Breakdown",
+              layout_sidebar(
+                sidebar = sidebar(
+                  width = 340,
+                  title = "Service Budget Splits (%)",
+                  p("Adjust service area percentages below. Defaults sum to 100%.", class = "small text-muted mb-2"),
+                  uiOutput("service_total_status"),
+                  numericInput("srv_019", "0-19 Services", value = 32.2, min = 0, max = 100, step = 0.1),
+                  numericInput("srv_sexhealth", "Sexual Health", value = 20.2, min = 0, max = 100, step = 0.1),
+                  numericInput("srv_staffing", "Staffing and Overheads", value = 17.1, min = 0, max = 100, step = 0.1),
+                  numericInput("srv_wellbeing", "Wellbeing Service", value = 9.6, min = 0, max = 100, step = 0.1),
+                  numericInput("srv_housing", "Housing related support", value = 6.4, min = 0, max = 100, step = 0.1),
+                  numericInput("srv_lifestyle", "Integrated Lifestyle Service", value = 4.0, min = 0, max = 100, step = 0.1),
+                  numericInput("srv_cyp_ewb", "CYP Emotional Wellbeing Service", value = 2.9, min = 0, max = 100, step = 0.1),
+                  numericInput("srv_cyp_other", "CYP other", value = 2.6, min = 0, max = 100, step = 0.1),
+                  numericInput("srv_healthchecks", "NHS Health Checks", value = 1.7, min = 0, max = 100, step = 0.1),
+                  numericInput("srv_adult_comm", "Other Adults Commissioned Services", value = 1.6, min = 0, max = 100, step = 0.1),
+                  numericInput("srv_ph_comm", "Public Health Commissioned Services", value = 1.0, min = 0, max = 100, step = 0.1),
+                  numericInput("srv_gambling_oral", "Public Health Gambling and Oral Health", value = 0.7, min = 0, max = 100, step = 0.1),
+                  actionButton("reset_srv_defaults", "Reset to Default Splits", class = "btn-outline-secondary btn-sm w-100 mt-2")
+                ),
+                card(
+                  card_header("Target Area Service Budget Breakdown (£)"),
+                  card_body(tableOutput("service_breakdown_table"))
+                )
+              )
+    ),
     nav_panel("Ward-Level Data", 
               card(
                 card_header("Source 2024 Ward Population & Health Indicator Data"),
@@ -258,7 +301,7 @@ ui <- page_sidebar(
 # ------------------------------------------------------------------------------
 server <- function(input, output, session) {
   
-  # PRESET OBSERVER: Uses named list to avoid jsonlite errors
+  # PRESET OBSERVER
   observeEvent(input$preset, {
     req(input$preset)
     
@@ -281,6 +324,13 @@ server <- function(input, output, session) {
       updateSliderInput(session, "w_coastal", value = weights$coastal)
     }
   }, ignoreInit = TRUE)
+  
+  # RESET SERVICE DEFAULTS OBSERVER
+  observeEvent(input$reset_srv_defaults, {
+    for (name in names(default_service_splits)) {
+      updateNumericInput(session, name, value = default_service_splits[[name]])
+    }
+  })
   
   # UI CONSTRAINT: Enforce 100% total limit across 7 sliders in 5% increments
   enforce_weights <- function(changed_slider, val) {
@@ -313,7 +363,7 @@ server <- function(input, output, session) {
   observeEvent(input$w_sparse, { enforce_weights("w_sparse", input$w_sparse) }, ignoreInit = TRUE)
   observeEvent(input$w_coastal, { enforce_weights("w_coastal", input$w_coastal) }, ignoreInit = TRUE)
   
-  # Dynamic status banner showing allocated vs unallocated %
+  # Dynamic status banner for domain weights
   output$weight_total_status <- renderUI({
     tot <- sum(c(
       input$w_pop, input$w_imd, input$w_age, input$w_65plus, 
@@ -337,10 +387,25 @@ server <- function(input, output, session) {
     }
   })
   
-  # DATA PIPELINE: Load hardcoded 2024 CSV text string cleanly
+  # Dynamic status banner for service budget splits
+  output$service_total_status <- renderUI({
+    srv_tot <- sum(c(
+      req(input$srv_019), req(input$srv_sexhealth), req(input$srv_staffing),
+      req(input$srv_wellbeing), req(input$srv_housing), req(input$srv_lifestyle),
+      req(input$srv_cyp_ewb), req(input$srv_cyp_other), req(input$srv_healthchecks),
+      req(input$srv_adult_comm), req(input$srv_ph_comm), req(input$srv_gambling_oral)
+    ))
+    
+    if (abs(srv_tot - 100) < 0.01) {
+      HTML('<div class="alert alert-success py-1 px-2 mb-2 small"><strong>Service Total: 100.0%</strong></div>')
+    } else {
+      HTML(paste0('<div class="alert alert-warning py-1 px-2 mb-2 small"><strong>Service Total: ', sprintf("%.1f%%", srv_tot), '</strong> (Target: 100%)</div>'))
+    }
+  })
+  
+  # DATA PIPELINE: Load hardcoded 2024 CSV text string
   ward_data_raw <- reactive({
     
-    # 30 Lincoln UA Wards
     lincoln_ua_codes <- c(
       "E05009636", "E05009638", "E05009639", "E05009647", "E05009648", 
       "E05009649", "E05009652", "E05010784", "E05010785", "E05010786", 
@@ -478,48 +543,105 @@ server <- function(input, output, session) {
       )
   })
   
+  # Reactive calculations for Service Budget Breakdown
+  service_splits_df <- reactive({
+    req(model_results())
+    
+    res <- model_results()
+    
+    lincoln_grant <- res %>% filter(unitary_authority == "Lincoln UA") %>% pull(if(input$show_damped) damped_grant else target_grant)
+    lincs_grant   <- res %>% filter(unitary_authority == "Lincolnshire UA") %>% pull(if(input$show_damped) damped_grant else target_grant)
+    
+    if(length(lincoln_grant) == 0) lincoln_grant <- 0
+    if(length(lincs_grant) == 0) lincs_grant <- 0
+    
+    tibble(
+      `Public Health Service Area` = c(
+        "0-19 Services",
+        "Sexual Health",
+        "Staffing and Overheads",
+        "Wellbeing Service",
+        "Housing related support",
+        "Integrated Lifestyle Service",
+        "CYP Emotional Wellbeing Service",
+        "CYP other",
+        "NHS Health Checks",
+        "Other Adults Commissioned Services",
+        "Public Health Commissioned Services",
+        "Public Health Gambling and Oral Health"
+      ),
+      `Allocation (%)` = c(
+        req(input$srv_019),
+        req(input$srv_sexhealth),
+        req(input$srv_staffing),
+        req(input$srv_wellbeing),
+        req(input$srv_housing),
+        req(input$srv_lifestyle),
+        req(input$srv_cyp_ewb),
+        req(input$srv_cyp_other),
+        req(input$srv_healthchecks),
+        req(input$srv_adult_comm),
+        req(input$srv_ph_comm),
+        req(input$srv_gambling_oral)
+      )
+    ) %>%
+      mutate(
+        `Lincoln UA (£)` = lincoln_grant * (`Allocation (%)` / 100),
+        `Lincolnshire UA (£)` = lincs_grant * (`Allocation (%)` / 100),
+        `Total County (£)` = `Lincoln UA (£)` + `Lincolnshire UA (£)`
+      )
+  })
+  
   output$vbox_total <- renderUI({
     value_box(
       title = "Total Public Health Grant Pool",
-      value = paste0("£", format(round(input$total_grant), big.mark = ",")),
+      value = paste0("£", formatC(round(input$total_grant), format = "d", big.mark = ",")),
+      p("100.0% Countywide Funding Pool", class = "small mb-0", style = "color: rgba(255, 255, 255, 0.85);"),
       showcase = icon("coins"),
-      theme = "primary"
+      theme = "primary",
+      height = "140px"
     )
   })
   
   output$vbox_urban <- renderUI({
     req(model_results())
     res <- model_results() %>% filter(unitary_authority == "Lincoln UA")
-    if(nrow(res) == 0) return(value_box("Lincoln UA Share", "Calculating...", showcase = icon("building")))
+    if(nrow(res) == 0) return(value_box("Lincoln UA Share", "Calculating...", showcase = icon("building"), height = "140px"))
     
     display_val <- if(input$show_damped) res$damped_grant else res$target_grant
     title_text <- if(input$show_damped) "Lincoln UA (Damped)" else "Lincoln UA (Target)"
     
-    val_text <- paste0("£", format(round(display_val), big.mark = ","), " (", round(display_val / input$total_grant * 100, 1), "%)")
+    val_text <- paste0("£", formatC(round(display_val), format = "d", big.mark = ","))
+    sub_text <- paste0(sprintf("%.1f%%", display_val / input$total_grant * 100), " of Total Pool")
     
     value_box(
       title = title_text,
       value = val_text,
+      p(sub_text, style = "font-size: 1.2rem; font-weight: 600; color: #FFFFFF; margin-bottom: 0;"),
       showcase = icon("building"),
-      theme = "info"
+      theme = "info",
+      height = "140px"
     )
   })
   
   output$vbox_rural <- renderUI({
     req(model_results())
     res <- model_results() %>% filter(unitary_authority == "Lincolnshire UA")
-    if(nrow(res) == 0) return(value_box("Lincolnshire UA Share", "Calculating...", showcase = icon("tree")))
+    if(nrow(res) == 0) return(value_box("Lincolnshire UA Share", "Calculating...", showcase = icon("tree"), height = "140px"))
     
     display_val <- if(input$show_damped) res$damped_grant else res$target_grant
     title_text <- if(input$show_damped) "Lincolnshire UA (Damped)" else "Lincolnshire UA (Target)"
     
-    val_text <- paste0("£", format(round(display_val), big.mark = ","), " (", round(display_val / input$total_grant * 100, 1), "%)")
+    val_text <- paste0("£", formatC(round(display_val), format = "d", big.mark = ","))
+    sub_text <- paste0(sprintf("%.1f%%", display_val / input$total_grant * 100), " of Total Pool")
     
     value_box(
       title = title_text,
       value = val_text,
+      p(sub_text, style = "font-size: 1.2rem; font-weight: 600; color: #FFFFFF; margin-bottom: 0;"),
       showcase = icon("tree"),
-      theme = "success"
+      theme = "success",
+      height = "140px"
     )
   })
   
@@ -554,12 +676,12 @@ server <- function(input, output, session) {
     
     tab %>%
       mutate(
-        `Projected Population` = format(round(`Projected Population`), big.mark = ","),
-        `Scaled Baseline (£)` = paste0("£", format(round(`Scaled Baseline (£)`), big.mark = ",")),
-        `Formula Target (£)` = paste0("£", format(round(`Formula Target (£)`), big.mark = ",")),
+        `Projected Population` = formatC(round(`Projected Population`), format = "d", big.mark = ","),
+        `Scaled Baseline (£)` = paste0("£", formatC(round(`Scaled Baseline (£)`), format = "d", big.mark = ",")),
+        `Formula Target (£)` = paste0("£", formatC(round(`Formula Target (£)`), format = "d", big.mark = ",")),
         `Target Per Head (£)` = paste0("£", sprintf("%.2f", `Target Per Head (£)`))
       ) %>%
-      {if("Damped Grant (£)" %in% names(.)) mutate(., `Damped Grant (£)` = paste0("£", format(round(`Damped Grant (£)`), big.mark = ","))) else .} %>%
+      {if("Damped Grant (£)" %in% names(.)) mutate(., `Damped Grant (£)` = paste0("£", formatC(round(`Damped Grant (£)`), format = "d", big.mark = ","))) else .} %>%
       {if("Shift vs Baseline (%)" %in% names(.)) mutate(., `Shift vs Baseline (%)` = sprintf("%+.1f%%", `Shift vs Baseline (%)`)) else .} %>%
       {if("Target Shift vs Baseline (%)" %in% names(.)) mutate(., `Target Shift vs Baseline (%)` = sprintf("%+.1f%%", `Target Shift vs Baseline (%)`)) else .}
     
@@ -579,6 +701,28 @@ server <- function(input, output, session) {
         `7. Coastal Share` = share_coastal
       ) %>%
       mutate(across(where(is.numeric), ~ sprintf("%.2f%%", .x * 100)))
+  }, striped = TRUE, hover = TRUE, bordered = TRUE)
+  
+  output$service_breakdown_table <- renderTable({
+    req(service_splits_df())
+    
+    df <- service_splits_df()
+    
+    totals_row <- tibble(
+      `Public Health Service Area` = "TOTAL ALLOCATED BUDGET",
+      `Allocation (%)` = sum(df$`Allocation (%)`),
+      `Lincoln UA (£)` = sum(df$`Lincoln UA (£)`),
+      `Lincolnshire UA (£)` = sum(df$`Lincolnshire UA (£)`),
+      `Total County (£)` = sum(df$`Total County (£)`)
+    )
+    
+    bind_rows(df, totals_row) %>%
+      mutate(
+        `Allocation (%)` = sprintf("%.1f%%", `Allocation (%)`),
+        `Lincoln UA (£)` = paste0("£", formatC(round(`Lincoln UA (£)`), format = "d", big.mark = ",")),
+        `Lincolnshire UA (£)` = paste0("£", formatC(round(`Lincolnshire UA (£)`), format = "d", big.mark = ",")),
+        `Total County (£)` = paste0("£", formatC(round(`Total County (£)`), format = "d", big.mark = ","))
+      )
   }, striped = TRUE, hover = TRUE, bordered = TRUE)
   
   output$comparison_plot <- renderPlot({
